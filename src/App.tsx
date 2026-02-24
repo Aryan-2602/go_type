@@ -17,9 +17,12 @@ import {
 } from "./lib/MetricUtils";
 import type { KeystrokeRecord } from "./lib/MetricUtils";
 import type { TypingPhase } from "./components/TypingArea";
+import type { KeySoundProfile } from "./lib/AudioEngine";
+import type { AmbientType } from "./lib/AmbientEngine";
 
 function AppContent() {
-  const engine = useAudioEngine();
+  const asmr = useAudioEngine();
+  const engine = asmr?.engine;
   const [phase, setPhase] = createSignal<TypingPhase>("idle");
   const [liveKeystrokes, setLiveKeystrokes] = createSignal<KeystrokeRecord[]>([]);
   const [liveStartTime, setLiveStartTime] = createSignal<number | null>(null);
@@ -78,6 +81,11 @@ function AppContent() {
     }
   };
 
+  const handleErrorShake = () => {
+    const el = document.getElementById("practice-area");
+    if (el) animate(el, { x: [0, -3, 3, -2, 2, 0] }, { duration: 0.18 });
+  };
+
   const handleRestart = () => {
     setFinalMetrics(null);
     setPhase("idle");
@@ -97,7 +105,7 @@ function AppContent() {
           <p class="text-zinc-500 text-sm mt-1">Zero-latency typing</p>
         </header>
 
-        <div class="flex flex-wrap gap-4 justify-center">
+        <div class="flex flex-wrap gap-4 justify-center items-center">
           <label class="flex items-center gap-2 text-zinc-400 text-sm font-mono cursor-pointer">
             <input
               type="checkbox"
@@ -125,6 +133,62 @@ function AppContent() {
             />
             Sound
           </label>
+          {asmr && (
+            <span class="flex items-center gap-2 text-zinc-400 text-sm font-mono">
+              Key sound:
+              <select
+                value={asmr.profile()}
+                onChange={(e) => asmr.setProfile((e.target as HTMLSelectElement).value as KeySoundProfile)}
+                class="rounded border border-zinc-600 bg-zinc-900 text-zinc-300 px-2 py-1 cursor-pointer"
+              >
+                <option value="Clicky">Clicky</option>
+                <option value="Tactile">Tactile</option>
+                <option value="Linear">Linear</option>
+              </select>
+            </span>
+          )}
+          {asmr && (
+            <>
+              <label class="flex items-center gap-2 text-zinc-400 text-sm font-mono cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={asmr.ambientType() !== null}
+                  onInput={(e) => {
+                    if ((e.target as HTMLInputElement).checked) asmr.setAmbientType("White Noise");
+                    else asmr.setAmbientType(null);
+                  }}
+                  class="rounded border-zinc-600 bg-zinc-900"
+                />
+                Ambient
+              </label>
+              {asmr.ambientType() !== null && (
+                <>
+                  <span class="flex items-center gap-2 text-zinc-400 text-sm font-mono">
+                    <select
+                      value={asmr.ambientType() ?? "White Noise"}
+                      onChange={(e) => asmr.setAmbientType((e.target as HTMLSelectElement).value as NonNullable<AmbientType>)}
+                      class="rounded border border-zinc-600 bg-zinc-900 text-zinc-300 px-2 py-1 cursor-pointer"
+                    >
+                      <option value="Rain">Rain</option>
+                      <option value="Cafe">Cafe</option>
+                      <option value="White Noise">White Noise</option>
+                    </select>
+                  </span>
+                  <span class="flex items-center gap-2 text-zinc-400 text-sm font-mono">
+                    Ambient vol:
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={Math.round(asmr.ambientVolume() * 100)}
+                      onInput={(e) => asmr.setAmbientVolume(Number((e.target as HTMLInputElement).value) / 100)}
+                      class="w-20 accent-amber-500"
+                    />
+                  </span>
+                </>
+              )}
+            </>
+          )}
         </div>
 
         <Show
@@ -161,6 +225,7 @@ function AppContent() {
                 setLiveStartTime(startTime);
               }}
               onFinish={handleFinish}
+              onError={handleErrorShake}
             />
             <p class="text-zinc-600 text-xs font-mono mt-4 text-center">
               Focus the area and start typing. No input field—direct key events.

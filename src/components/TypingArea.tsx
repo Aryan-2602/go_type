@@ -7,6 +7,7 @@ import {
   on,
   Index,
 } from "solid-js";
+import { animate } from "motion";
 import { useAudioEngine } from "./ASMRManager";
 import type { KeystrokeRecord } from "../lib/MetricUtils";
 import { getRandomWords } from "../data/words";
@@ -30,6 +31,7 @@ type Props = {
   onPhaseChange?: (phase: TypingPhase) => void;
   onStateChange?: (state: { keystrokes: KeystrokeRecord[]; startTime: number | null }) => void;
   onFinish?: (state: TypingState) => void;
+  onError?: () => void;
 };
 
 const WORD_COUNT = 30;
@@ -69,7 +71,8 @@ function CharSpan(props: CharSpanProps) {
 }
 
 export function TypingArea(props: Props) {
-  const engine = useAudioEngine();
+  const asmr = useAudioEngine();
+  const engine = () => asmr?.engine ?? null;
   const [words, setWords] = createSignal<string[]>(getRandomWords(WORD_COUNT));
   const [typedChars, setTypedChars] = createSignal<string[]>([]);
   const [startTime, setStartTime] = createSignal<number | null>(null);
@@ -82,6 +85,7 @@ export function TypingArea(props: Props) {
   const [caretHeight, setCaretHeight] = createSignal(0);
 
   const containerRef = { el: null as HTMLDivElement | null };
+  const caretRef = { el: null as HTMLDivElement | null };
   const charRefs: (HTMLElement | null)[] = [];
 
   const fullText = createMemo(() => words().join(" "));
@@ -177,13 +181,14 @@ export function TypingArea(props: Props) {
       setPhase("active");
       setStartTime(Date.now());
       props.onPhaseChange?.("active");
-      engine?.resume();
+      engine()?.resume();
     }
 
     const correct = key === expected;
+    if (!correct) props.onError?.();
     if (!correct && props.stopOnError) return;
 
-    engine?.playKey("keydown");
+    engine()?.playKey();
 
     const ts = Date.now();
     const newKeystrokes = [...keystrokes(), { key, timestamp: ts, correct }];
@@ -191,6 +196,14 @@ export function TypingArea(props: Props) {
 
     const newTypedLen = typedLen + 1;
     setTypedChars((prev) => [...prev, key]);
+
+    if (correct && newTypedLen % 10 === 0 && caretRef.el) {
+      animate(
+        caretRef.el,
+        { boxShadow: ["0 0 0 transparent", "0 0 12px 4px rgba(251, 191, 36, 0.4)", "0 0 0 transparent"] },
+        { duration: 0.35, ease: "easeOut" }
+      );
+    }
 
     if (newTypedLen >= chars().length) {
       setEndTime(ts);
@@ -227,6 +240,7 @@ export function TypingArea(props: Props) {
         </Index>
       </div>
       <div
+        ref={(el) => (caretRef.el = el)}
         class="pointer-events-none absolute left-0 top-0 w-[2px] bg-amber-400/90 rounded-sm animate-caret-blink transition-transform duration-100 ease-out"
         style={{
           transform: `translate3d(${caretX()}px, ${caretY()}px, 0)`,
